@@ -21,5 +21,7 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
+xattr -cr "$app_path"
 codesign --force --sign - "$app_path"
+codesign --verify --deep --strict "$app_path"
 echo "Built $app_path"

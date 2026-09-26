@@ -37,6 +37,10 @@ struct SelfTest {
                    "Corrections influence later plans conservatively")
         try expect(StyleEngine.evaluate(rendered: metrics(0.1), target: metrics(0.6),
                     planConfidence: 0.85).status == .outlier, "Outliers are surfaced")
+        let oldState = Data("{\"referenceIDs\":[\"a\"],\"corrections\":{}}".utf8)
+        let migrated = try JSONDecoder().decode(TripPreferences.self, from: oldState)
+        try expect(migrated.referenceIDs.contains("a") && migrated.selectedIDs == nil,
+                   "Saved trips migrate to the new selection model")
 
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
@@ -68,6 +72,13 @@ struct SelfTest {
         try expect(after.luminance > before.luminance + 0.05,
                    "Native renderer brightens the exported image")
         try expect(FileManager.default.fileExists(atPath: output.path), "Export is present")
+        let smallOutput = temp.appendingPathComponent("small.jpg")
+        _ = try NativeRenderer().render(input: input, output: smallOutput,
+            plan: .identity, maxPixelSize: 32)
+        let smallSource = CGImageSourceCreateWithURL(smallOutput as CFURL, nil)!
+        let smallImage = CGImageSourceCreateImageAtIndex(smallSource, 0, nil)!
+        try expect(max(smallImage.width, smallImage.height) == 32,
+                   "Requested long-edge export size is respected")
         print("Self-test passed: planning, learning, evaluation, and JPEG rendering")
     }
 

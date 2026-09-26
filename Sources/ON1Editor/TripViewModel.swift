@@ -1,10 +1,13 @@
 import AppKit
+import CryptoKit
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
 final class TripViewModel: ObservableObject {
     @Published var folderURL: URL?
     @Published var photos: [PhotoRecord] = []
+    @Published var externalReferences: [PhotoRecord] = []
     @Published var selectedID: String?
     @Published var preferences = TripPreferences()
     @Published var draftCorrection = Correction()
@@ -15,8 +18,11 @@ final class TripViewModel: ObservableObject {
 
     private var revision = 0
     var selected: PhotoRecord? { photos.first { $0.id == selectedID } }
-    var referenceCount: Int { preferences.referenceIDs.count }
+    var referenceCount: Int { preferences.referenceIDs.count + externalReferences.count }
+    var selectedCount: Int { preferences.selectedIDs?.count ?? photos.count }
     var reviewCount: Int { photos.filter { $0.result?.status != .pass && $0.result != nil }.count }
+
+    func isSelected(_ id: String) -> Bool { preferences.selectedIDs?.contains(id) ?? true }
 
     func chooseFolder() {
         let panel = NSOpenPanel()
@@ -32,6 +38,7 @@ final class TripViewModel: ObservableObject {
         let current = revision
         folderURL = folder
         photos = []
+        externalReferences = []
         selectedID = nil
         preferences = TripStore.load(for: folder)
         isBusy = true
@@ -39,15 +46,27 @@ final class TripViewModel: ObservableObject {
         Task {
             do {
                 let cache = try TripStore.cacheDirectory()
-                let records = await Task.detached(priority: .userInitiated) {
-                    PhotoLibrary.discover(in: folder).compactMap {
+                let savedReferencePaths = preferences.externalReferencePaths
+                let contents = await Task.detached(priority: .userInitiated) { () -> ([PhotoRecord], [PhotoRecord]) in
+                    let records = PhotoLibrary.discover(in: folder).compactMap {
                         try? PhotoLibrary.analyze($0, relativeTo: folder, cacheDirectory: cache)
                     }
+                    let references = savedReferencePaths.compactMap {
+                        try? PhotoLibrary.analyzeExternalReference(URL(fileURLWithPath: $0), cacheDirectory: cache)
+                    }
+                    return (records, references)
                 }.value
                 guard current == revision else { return }
-                photos = records.sorted {
+                photos = contents.0.sorted {
                     ($0.capturedAt ?? .distantFuture, $0.id) <
                         ($1.capturedAt ?? .distantFuture, $1.id)
+                }
+                externalReferences = contents.1
+                if preferences.selectedIDs == nil {
+                    preferences.selectedIDs = Set(photos.map(\.id))
+                    persist()
+                } else {
+                    preferences.selectedIDs?.formIntersection(Set(photos.map(\.id)))
                 }
                 selectedID = photos.first?.id
                 loadDraft()
@@ -71,6 +90,71 @@ final class TripViewModel: ObservableObject {
         rebuild()
     }
 
+    func addReferenceJPEGs() {
+        guard folderURL != nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.jpeg]
+        panel.prompt = "Add references"
+        guard panel.runModal() == .OK else { return }
+        do {
+            let cache = try TripStore.cacheDirectory()
+            let existing = Set(externalReferences.map { $0.sourceURL.standardizedFileURL.path })
+            let added = panel.urls.filter { !existing.contains($0.standardizedFileURL.path) }
+                .compactMap { try? PhotoLibrary.analyzeExternalReference($0, cacheDirectory: cache) }
+            externalReferences.append(contentsOf: added)
+            preferences.externalReferencePaths = externalReferences.map { $0.sourceURL.path }
+            persist()
+            rebuild()
+        } catch { report(error) }
+    }
+
+    func removeExternalReference(_ id: String) {
+        externalReferences.removeAll { $0.id == id }
+        preferences.externalReferencePaths = externalReferences.map { $0.sourceURL.path }
+        persist()
+        rebuild()
+    }
+
+    func toggleSelected(_ id: String) {
+        if isSelected(id) { preferences.selectedIDs?.remove(id) }
+        else { preferences.selectedIDs?.insert(id) }
+        persist()
+        rebuild()
+    }
+
+    func selectAll() {
+        preferences.selectedIDs = Set(photos.map(\.id))
+        persist()
+        rebuild()
+    }
+
+    func selectNone() {
+        preferences.selectedIDs = []
+        persist()
+        rebuild()
+    }
+
+    func selectRAWOnly() {
+        preferences.selectedIDs = Set(photos.filter {
+            PhotoLibrary.raw.contains($0.sourceURL.pathExtension.lowercased())
+        }.map(\.id))
+        persist()
+        rebuild()
+    }
+
+    func setExportOriginal(_ value: Bool) {
+        preferences.exportOriginal = value
+        persist()
+    }
+
+    func setExportLongEdge(_ value: Int) {
+        preferences.exportLongEdge = value
+        persist()
+    }
+
     func applyCorrection() {
         guard let id = selectedID else { return }
         if draftCorrection.isZero { preferences.corrections.removeValue(forKey: id) }
@@ -91,13 +175,13 @@ final class TripViewModel: ObservableObject {
         let saved = preferences
         guard let profile = StyleEngine.profile(references: inputs.filter {
             saved.referenceIDs.contains($0.id)
-        }) else {
+        } + externalReferences) else {
             photos = photos.map { item in
                 var copy = item
                 copy.plan = nil; copy.result = nil; copy.editedPreviewURL = nil
                 return copy
             }
-            message = "Choose one or more references to generate edits."
+            message = "Choose trip references or add reference JPEGs to generate edits."
             return
         }
         isBusy = true
@@ -109,6 +193,12 @@ final class TripViewModel: ObservableObject {
                     let renderer = NativeRenderer()
                     return inputs.map { photo in
                         var item = photo
+                        guard saved.selectedIDs?.contains(photo.id) ?? true else {
+                            item.plan = nil
+                            item.result = nil
+                            item.editedPreviewURL = nil
+                            return item
+                        }
                         let otherPhotos = inputs.filter { $0.id != photo.id }
                         let otherCorrections = saved.corrections.filter { $0.key != photo.id }
                         let learned = StyleEngine.learnedPreference(for: photo.scene,
@@ -135,13 +225,19 @@ final class TripViewModel: ObservableObject {
                 guard current == revision else { return }
                 photos = updated
                 isBusy = false
-                message = "\(updated.count) edits planned · \(reviewCount) to review"
+                message = "\(selectedCount) edits planned · \(reviewCount) to review"
             } catch { report(error) }
         }
     }
 
     func exportEdited() {
         guard folderURL != nil, photos.contains(where: { $0.plan != nil }) else { return }
+        let longEdge = preferences.exportLongEdge
+        let fullSize = preferences.exportOriginal
+        if !fullSize && !(256...20000).contains(longEdge) {
+            reportMessage("Choose a long edge between 256 and 20,000 pixels.")
+            return
+        }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -152,27 +248,22 @@ final class TripViewModel: ObservableObject {
         message = "Exporting edited JPEGs…"
         let items = photos
         Task {
-            let summary = await Task.detached(priority: .userInitiated) { () -> (Int, Int, Int, Int, String?) in
+            let summary = await Task.detached(priority: .userInitiated) { () -> (Int, Int, Int, String?) in
                 let renderer = NativeRenderer()
-                var exported = 0, rawSkipped = 0, existingSkipped = 0, failures = 0
+                var exported = 0, existingSkipped = 0, failures = 0
                 var firstError: String?
                 for photo in items {
                     guard let plan = photo.plan else { continue }
-                    if PhotoLibrary.raw.contains(photo.sourceURL.pathExtension.lowercased()) {
-                        rawSkipped += 1; continue
-                    }
-                    let components = photo.id.split(separator: "/").map(String.init)
-                    let parent = components.dropLast().joined(separator: "/")
                     let stem = photo.sourceURL.deletingPathExtension().lastPathComponent
-                    let outputFolder = parent.isEmpty ? destination : destination.appendingPathComponent(parent)
-                    let output = outputFolder.appendingPathComponent(stem + "-" + photo.sourceURL.pathExtension.lowercased() + "-edited.jpg")
+                    let hash = SHA256.hash(data: Data(photo.id.utf8))
+                        .prefix(4).map { String(format: "%02x", $0) }.joined()
+                    let output = destination.appendingPathComponent(stem + "-" + photo.sourceURL.pathExtension.lowercased() + "-edited-" + hash + ".jpg")
                     do {
-                        try FileManager.default.createDirectory(at: outputFolder, withIntermediateDirectories: true)
                         if FileManager.default.fileExists(atPath: output.path) {
                             existingSkipped += 1; continue
                         }
                         _ = try renderer.render(input: photo.sourceURL, output: output, plan: plan,
-                                                maxPixelSize: nil)
+                                                maxPixelSize: fullSize ? nil : longEdge)
                         let encoder = JSONEncoder()
                         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                         try encoder.encode(plan).write(to: output.appendingPathExtension("json"), options: .atomic)
@@ -182,11 +273,11 @@ final class TripViewModel: ObservableObject {
                         if firstError == nil { firstError = error.localizedDescription }
                     }
                 }
-                return (exported, rawSkipped, existingSkipped, failures, firstError)
+                return (exported, existingSkipped, failures, firstError)
             }.value
             isBusy = false
-            message = "Exported \(summary.0) JPEGs · \(summary.1) RAW skipped · \(summary.2) existing skipped · \(summary.3) errors"
-            if summary.3 > 0, let error = summary.4 { reportMessage(error) }
+            message = "Exported \(summary.0) JPEGs · \(summary.1) existing skipped · \(summary.2) errors"
+            if summary.2 > 0, let error = summary.3 { reportMessage(error) }
         }
     }
 

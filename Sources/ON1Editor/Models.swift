@@ -81,5 +81,25 @@ struct Correction: Codable, Sendable {
 
 struct TripPreferences: Codable, Sendable {
     var referenceIDs: Set<String> = []
+    var externalReferencePaths: [String] = []
+    var selectedIDs: Set<String>? = nil
     var corrections: [String: Correction] = [:]
+    var exportOriginal = true
+    var exportLongEdge = 3000
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case referenceIDs, externalReferencePaths, selectedIDs, corrections, exportOriginal, exportLongEdge
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        referenceIDs = try values.decodeIfPresent(Set<String>.self, forKey: .referenceIDs) ?? []
+        externalReferencePaths = try values.decodeIfPresent([String].self, forKey: .externalReferencePaths) ?? []
+        selectedIDs = try values.decodeIfPresent(Set<String>.self, forKey: .selectedIDs)
+        corrections = try values.decodeIfPresent([String: Correction].self, forKey: .corrections) ?? [:]
+        exportOriginal = try values.decodeIfPresent(Bool.self, forKey: .exportOriginal) ?? true
+        exportLongEdge = try values.decodeIfPresent(Int.self, forKey: .exportLongEdge) ?? 3000
+    }
 }

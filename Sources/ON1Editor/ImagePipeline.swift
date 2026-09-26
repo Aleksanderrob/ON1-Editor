@@ -31,6 +31,14 @@ enum PhotoLibrary {
 
     static func analyze(_ url: URL, relativeTo folder: URL, cacheDirectory: URL) throws -> PhotoRecord {
         let relative = String(url.path.dropFirst(folder.path.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return try analyze(url, id: relative, cacheDirectory: cacheDirectory)
+    }
+
+    static func analyzeExternalReference(_ url: URL, cacheDirectory: URL) throws -> PhotoRecord {
+        try analyze(url, id: "external:" + url.standardizedFileURL.path, cacheDirectory: cacheDirectory)
+    }
+
+    private static func analyze(_ url: URL, id: String, cacheDirectory: URL) throws -> PhotoRecord {
         let source = CGImageSourceCreateWithURL(url as CFURL, nil)
         guard let source, let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -55,7 +63,7 @@ enum PhotoLibrary {
         if !FileManager.default.fileExists(atPath: previewURL.path) {
             try JPEGWriter.write(thumbnail, to: previewURL, quality: 0.84)
         }
-        return PhotoRecord(id: relative, sourceURL: url, previewURL: previewURL,
+        return PhotoRecord(id: id, sourceURL: url, previewURL: previewURL,
                            capturedAt: captured, pixelWidth: dimensions.0,
                            pixelHeight: dimensions.1, metrics: ImageAnalyzer.measure(thumbnail),
                            plan: nil, result: nil, editedPreviewURL: nil)
@@ -135,6 +143,17 @@ struct NativeRenderer: RendererAdapter {
             ] as CFDictionary)
         }
         guard let original else { throw ImagePipelineError.unreadable(input) }
+        if PhotoLibrary.raw.contains(input.pathExtension.lowercased()) {
+            let properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]) ?? [:]
+            let nativeWidth = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+            let nativeHeight = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+            let nativeLongEdge = max(nativeWidth, nativeHeight)
+            let expectedLongEdge = min(nativeLongEdge, maxPixelSize ?? nativeLongEdge)
+            guard expectedLongEdge > 0,
+                  Double(max(original.width, original.height)) >= Double(expectedLongEdge) * 0.9 else {
+                throw ImagePipelineError.unreadable(input)
+            }
+        }
         let rendered = try PixelRenderer.apply(plan, to: original, source: input)
         try JPEGWriter.write(rendered, to: output, quality: 0.91)
         return ImageAnalyzer.measure(rendered)

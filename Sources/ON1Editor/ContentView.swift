@@ -10,7 +10,7 @@ struct ContentView: View {
             Divider()
             HStack(spacing: 0) {
                 sidebar
-                    .frame(width: 280)
+                    .frame(width: 310)
                 Divider()
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -21,7 +21,7 @@ struct ContentView: View {
                 Text(model.message).lineLimit(1)
                 Spacer()
                 if !model.photos.isEmpty {
-                    Text("\(model.photos.count) photos  ·  \(model.referenceCount) references  ·  \(model.reviewCount) to review")
+                    Text("\(model.selectedCount) selected  ·  \(model.referenceCount) references  ·  \(model.reviewCount) to review")
                 }
             }
             .font(.caption)
@@ -43,7 +43,23 @@ struct ContentView: View {
             }
             Spacer()
             Button("Open Trip…", systemImage: "folder") { model.chooseFolder() }
-            Button("Export Edited JPEGs…", systemImage: "square.and.arrow.up") { model.exportEdited() }
+            Button("Add JPEG References…", systemImage: "star") { model.addReferenceJPEGs() }
+                .disabled(model.folderURL == nil || model.isBusy)
+            Toggle("Original size", isOn: Binding(
+                get: { model.preferences.exportOriginal },
+                set: { model.setExportOriginal($0) }
+            ))
+            .toggleStyle(.checkbox)
+            .disabled(model.photos.isEmpty || model.isBusy)
+            if !model.preferences.exportOriginal {
+                TextField("Long edge", value: Binding(
+                    get: { model.preferences.exportLongEdge },
+                    set: { model.setExportLongEdge($0) }
+                ), format: .number)
+                .frame(width: 68)
+                Text("px long edge").font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Export Selected…", systemImage: "square.and.arrow.up") { model.exportEdited() }
                 .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
         }
         .padding(14)
@@ -51,13 +67,30 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TRIP PHOTOS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                .padding(.horizontal, 14).padding(.top, 14)
+            HStack {
+                Text("TRIP PHOTOS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Button("All") { model.selectAll() }
+                Button("RAW only") { model.selectRAWOnly() }
+                Button("None") { model.selectNone() }
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .disabled(model.isBusy || model.photos.isEmpty)
+            .padding(.horizontal, 14).padding(.top, 14)
             ScrollView {
                 LazyVStack(spacing: 4) {
                     ForEach(model.photos) { photo in
-                        Button { model.select(photo.id) } label: {
-                            HStack(spacing: 10) {
+                        HStack(spacing: 6) {
+                            Toggle("Edit \(photo.sourceURL.lastPathComponent)", isOn: Binding(
+                                get: { model.isSelected(photo.id) },
+                                set: { _ in model.toggleSelected(photo.id) }
+                            ))
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            .help("Include in editing and export")
+                            Button { model.select(photo.id) } label: {
+                                HStack(spacing: 10) {
                                 PhotoImage(url: photo.previewURL)
                                     .frame(width: 58, height: 45)
                                     .clipShape(RoundedRectangle(cornerRadius: 5))
@@ -66,9 +99,6 @@ struct ContentView: View {
                                         .font(.subheadline).lineLimit(1)
                                     HStack(spacing: 5) {
                                         Text(photo.scene.rawValue)
-                                        if model.preferences.referenceIDs.contains(photo.id) {
-                                            Image(systemName: "star.fill").foregroundStyle(.yellow)
-                                        }
                                         if photo.result?.status == .outlier {
                                             Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
                                         } else if photo.result?.status == .uncertain {
@@ -78,13 +108,45 @@ struct ContentView: View {
                                     .font(.caption2).foregroundStyle(.secondary)
                                 }
                                 Spacer(minLength: 0)
+                                }
+                                .padding(6)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(model.selectedID == photo.id ? Color.accentColor.opacity(0.20) : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                            Button { model.toggleReference(photo.id) } label: {
+                                Image(systemName: model.preferences.referenceIDs.contains(photo.id) ? "star.fill" : "star")
+                                    .foregroundStyle(model.preferences.referenceIDs.contains(photo.id) ? .yellow : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Use as style reference")
+                        }
+                        .disabled(model.isBusy)
+                    }
+                    if !model.externalReferences.isEmpty {
+                        Divider().padding(.vertical, 8)
+                        Text("REFERENCE JPEGs")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 6)
+                        ForEach(model.externalReferences) { reference in
+                            HStack(spacing: 8) {
+                                PhotoImage(url: reference.previewURL)
+                                    .frame(width: 58, height: 45)
+                                Text(reference.sourceURL.lastPathComponent)
+                                    .font(.subheadline).lineLimit(1)
+                                Spacer(minLength: 0)
+                                Button { model.removeExternalReference(reference.id) } label: {
+                                    Image(systemName: "xmark.circle")
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove reference")
+                                .disabled(model.isBusy)
                             }
                             .padding(6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(model.selectedID == photo.id ? Color.accentColor.opacity(0.20) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -107,6 +169,12 @@ struct ContentView: View {
                         Label(status.rawValue, systemImage: status == .pass ? "checkmark.circle" : "exclamationmark.circle")
                             .foregroundStyle(status == .pass ? .green : .orange)
                     }
+                    Toggle("Edit", isOn: Binding(
+                        get: { model.isSelected(photo.id) },
+                        set: { _ in model.toggleSelected(photo.id) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .disabled(model.isBusy)
                     Button(model.preferences.referenceIDs.contains(photo.id) ? "Remove Reference" : "Use as Reference",
                            systemImage: model.preferences.referenceIDs.contains(photo.id) ? "star.fill" : "star") {
                         model.toggleReference(photo.id)

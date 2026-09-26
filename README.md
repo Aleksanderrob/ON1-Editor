@@ -20,22 +20,25 @@ open .build/ON1Editor.app
 ```
 
 The bundle is signed locally with an ad hoc signature. It is not notarized for distribution.
+After building or unzipping the supplied app, you can open it by double-clicking `ON1Editor.app`; normal use does not require Terminal. A Desktop shortcut can point to that app.
 
 ## First trip
 
 1. Choose **Open Trip…** and select a folder. Nested folders are included. ImageIO generates cached previews and reads capture dates where available.
-2. Select one or more photos and click **Use as Reference**. Their measured colour, tone and contrast define the trip target. References from matching lighting classes are preferred when planning edits.
-3. Review each original and edited preview. The app plans exposure, contrast, saturation and warmth separately for every photo, then compares the rendered preview with the target. Images marked **Review** or **Outlier** deserve attention.
-4. Move the correction sliders on an image and click **Apply Correction**. The saved correction affects that image and contributes a small preference bias to later plans for photos with similar lighting in this trip.
-5. Choose **Export Edited JPEGs…**. The app writes full-resolution JPEGs and a JSON edit plan alongside each export, preserving the source folder structure. Existing exports are skipped rather than overwritten.
+2. Mark reference photos with the stars in the trip list, or choose **Add JPEG References…** to select JPEGs from another folder. Five reference JPEGs work as well as one; the app uses their median measurements and prefers matching lighting classes.
+3. Mark photos to edit with the checkboxes. **RAW only** selects only RAW files; **All** and **None** reset the selection. JPEG references can remain unselected while RAW files receive edit plans.
+4. Review each original and edited preview. The app plans exposure, contrast, saturation and warmth separately for every selected photo, then compares the rendered preview with the target. Images marked **Review** or **Outlier** deserve attention.
+5. Move the correction sliders on an image and click **Apply Correction**. The saved correction affects that image and contributes a small preference bias to later plans for photos with similar lighting in this trip.
+6. Keep **Original size** checked, or clear it and enter a long edge in pixels. Choose **Export Selected…** and pick one output folder. The app writes edited JPEGs and JSON edit plans directly into that folder. Existing exports are skipped rather than overwritten.
 
-JPEG, PNG, HEIC/HEIF and TIFF are supported for export when macOS ImageIO can decode them. Several RAW extensions are discovered for preview, but RAW export is intentionally skipped in this milestone. Unreadable files are skipped during import.
+JPEG, PNG, HEIC/HEIF, TIFF and several RAW formats are accepted when macOS ImageIO can decode the camera file. RAW export renders from the full image, with a size check to avoid silently exporting an embedded low-resolution preview. Camera support varies with macOS; an unsupported RAW yields an error and is not exported. Unreadable files are skipped during import. The current renderer writes 8-bit sRGB JPEGs and does not expose RAW development controls such as demosaicing or white balance.
 
 All previews and trip preferences stay in `~/Library/Application Support/ON1Editor/`. No image or preference is uploaded. The app does not modify ON1 sidecars or presets.
 
 ## What is implemented
 
 - Local folder discovery, EXIF capture date reading, cached previews and trip persistence.
+- Separate reference JPEG import, multi-reference style profiles, selected-photo editing and RAW-only selection.
 - Structured image metrics: luminance, contrast, saturation, warmth, and clipped highlight/shadow proportions.
 - Median reference style profile with broad lighting classes.
 - Per-image, renderer-independent edit plans and a native JPEG renderer.
@@ -44,7 +47,7 @@ All previews and trip preferences stay in `~/Library/Application Support/ON1Edit
 
 ## Current limits
 
-The lighting classes are based on luminance. There is no semantic scene understanding, face or skin detection, local masking, RAW development, lens correction, LUT generation, or direct ON1 automation yet. The simple renderer works in 8-bit sRGB and applies global adjustments; colour-critical use should wait for a colour-managed, higher-bit-depth renderer. Confidence is a heuristic rather than a calibrated probability. The review list is shown by status in the photo sidebar, with no review-only filter yet.
+The lighting classes are based on luminance. There is no semantic scene understanding, face or skin detection, local masking, advanced RAW development, lens correction, LUT generation, or direct ON1 automation yet. The simple renderer works in 8-bit sRGB and applies global adjustments; colour-critical use should wait for a colour-managed, higher-bit-depth renderer. Confidence is a heuristic rather than a calibrated probability. The review list is shown by status in the photo sidebar, with no review-only filter yet. This milestone has not been validated against a representative set of real camera RAW files.
 
 The [architecture and next milestone](docs/ARCHITECTURE.md) and [open-source reuse findings](docs/RESEARCH.md) record the boundaries and remaining investigations.
 
