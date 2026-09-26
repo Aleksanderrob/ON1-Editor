@@ -8,6 +8,7 @@ final class TripViewModel: ObservableObject {
     @Published var folderURL: URL?
     @Published var photos: [PhotoRecord] = []
     @Published var externalReferences: [PhotoRecord] = []
+    @Published var unreadableCount = 0
     @Published var selectedID: String?
     @Published var preferences = TripPreferences()
     @Published var draftCorrection = Correction()
@@ -39,6 +40,7 @@ final class TripViewModel: ObservableObject {
         folderURL = folder
         photos = []
         externalReferences = []
+        unreadableCount = 0
         selectedID = nil
         preferences = TripStore.load(for: folder)
         isBusy = true
@@ -47,14 +49,15 @@ final class TripViewModel: ObservableObject {
             do {
                 let cache = try TripStore.cacheDirectory()
                 let savedReferencePaths = preferences.externalReferencePaths
-                let contents = await Task.detached(priority: .userInitiated) { () -> ([PhotoRecord], [PhotoRecord]) in
-                    let records = PhotoLibrary.discover(in: folder).compactMap {
+                let contents = await Task.detached(priority: .userInitiated) { () -> ([PhotoRecord], [PhotoRecord], Int) in
+                    let files = PhotoLibrary.discover(in: folder)
+                    let records = files.compactMap {
                         try? PhotoLibrary.analyze($0, relativeTo: folder, cacheDirectory: cache)
                     }
                     let references = savedReferencePaths.compactMap {
                         try? PhotoLibrary.analyzeExternalReference(URL(fileURLWithPath: $0), cacheDirectory: cache)
                     }
-                    return (records, references)
+                    return (records, references, files.count - records.count)
                 }.value
                 guard current == revision else { return }
                 photos = contents.0.sorted {
@@ -62,6 +65,7 @@ final class TripViewModel: ObservableObject {
                         ($1.capturedAt ?? .distantFuture, $1.id)
                 }
                 externalReferences = contents.1
+                unreadableCount = contents.2
                 if preferences.selectedIDs == nil {
                     preferences.selectedIDs = Set(photos.map(\.id))
                     persist()
@@ -73,6 +77,7 @@ final class TripViewModel: ObservableObject {
                 isBusy = false
                 message = photos.isEmpty ? "No readable photos found." :
                     "\(photos.count) photos ready. Choose one or more references."
+                if unreadableCount > 0 { message += " \(unreadableCount) unreadable file(s) skipped." }
                 if !preferences.referenceIDs.isEmpty { rebuild() }
             } catch { report(error) }
         }

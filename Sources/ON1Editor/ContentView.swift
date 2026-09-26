@@ -23,6 +23,9 @@ struct ContentView: View {
                 if !model.photos.isEmpty {
                     Text("\(model.selectedCount) selected  ·  \(model.referenceCount) references  ·  \(model.reviewCount) to review")
                 }
+                if model.unreadableCount > 0 {
+                    Text("· \(model.unreadableCount) unreadable").foregroundStyle(.orange)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
