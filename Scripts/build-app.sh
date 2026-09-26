@@ -13,10 +13,11 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>dev.on1editor.local</string>
   <key>CFBundleName</key><string>ON1 Editor</string>
+  <key>CFBundleDisplayName</key><string>ON1 Editor</string>
   <key>CFBundleExecutable</key><string>ON1Editor</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.2.0</string>
+  <key>CFBundleVersion</key><string>2</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
