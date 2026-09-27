@@ -23,6 +23,9 @@ struct ContentView: View {
                 if model.lastHandoffURL != nil {
                     Button("Show ON1 Workspace") { model.showLastHandoff() }
                 }
+                if let run = model.lastON1RunURL {
+                    Button("Show ON1 Run") { NSWorkspace.shared.activateFileViewerSelecting([run]) }
+                }
                 if !model.photos.isEmpty {
                     Text("\(model.selectedCount) selected  ·  \(model.referenceCount) references  ·  \(model.reviewCount) to review")
                 }
@@ -71,9 +74,10 @@ struct ContentView: View {
                 Spacer()
                 Button("Export Edited JPEGs…", systemImage: "square.and.arrow.up") { model.exportEdited() }
                     .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
-                Button("Prepare for ON1…", systemImage: "arrow.up.right.square") { model.prepareForON1() }
+                Button("Run in ON1 and Export…", systemImage: "wand.and.stars") { model.automateInON1() }
                     .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
-                    .help("Copy selected photos, reference images and individual looks into a separate ON1 workspace")
+                    .help("ON1 edits copies of the selected photos, then exports JPEGs to your chosen folder. Requires Accessibility access.")
+                    .buttonStyle(.borderedProminent)
             }
         }
         .padding(14)

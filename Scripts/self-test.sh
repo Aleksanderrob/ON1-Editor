@@ -9,5 +9,7 @@ swiftc -sdk "${SDKROOT:-$(xcrun --show-sdk-path)}" -target "$(uname -m)-apple-ma
     Sources/ON1Editor/StyleEngine.swift \
     Sources/ON1Editor/ImagePipeline.swift \
     Sources/ON1Editor/ON1Bridge.swift \
+    Sources/ON1Editor/ON1Automation.swift \
+    Sources/ON1Editor/TripStore.swift \
     Tests/SelfTest.swift -o .build/on1-self-test
 .build/on1-self-test

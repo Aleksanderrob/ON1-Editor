@@ -2,7 +2,7 @@
 
 A local-first macOS prototype for turning a trip folder into a more coherent set of photos. It measures each photo, learns a target look from reference images you select, creates an individual edit plan, shows before/after previews, flags visual outliers, and exports edited JPEGs. The source photos remain untouched.
 
-This is an early working milestone of the [product brief](docs/PRODUCT_BRIEF.md), built for one photographer and modest collections. It is not a finished RAW workflow or an ON1 Photo RAW plugin.
+This is an early working milestone of the [product brief](docs/PRODUCT_BRIEF.md), built for one photographer and modest collections. It can now drive ON1 Photo RAW 2026's own Edit and Export controls for selected photos. It is not an ON1 plugin.
 
 ## Run on macOS
 
@@ -31,11 +31,11 @@ If a synced folder adds Finder metadata to a built app and disrupts signature ve
 4. Review each original and edited preview. The app plans exposure, contrast, saturation and warmth separately for every selected photo, then compares the rendered preview with the target. Images marked **Review** or **Outlier** deserve attention.
 5. Move the correction sliders on an image and click **Apply Correction**. The saved correction affects that image and contributes a small preference bias to later plans for photos with similar lighting in this trip.
 6. Keep **Original size** checked, or clear it and enter a long edge in pixels. Choose **Export Edited JPEGs…** and pick one output folder. The app writes edited JPEGs and JSON edit plans directly into that folder. Existing exports are skipped rather than overwritten.
-7. To continue in ON1 Photo RAW 2026, choose **Prepare for ON1…** and a location outside the trip folder. The app copies only selected photos into a new workspace, adds the style references and an individual `.cube` look and JSON plan for each photo, then launches ON1 and shows the copy folder in Finder. In ON1, choose **Browse Folder** and select **Photos to Edit** from the workspace. The workspace includes edited previews and instructions. Apply the matching LUT in ON1, refine the RAW edit, and export there at the size shown in the handoff. This handoff does not automatically navigate ON1 to the folder, set its sliders, or run its export command.
+7. For an ON1 Photo RAW 2026 export, choose **Run in ON1 and Export…** and an output folder. The app copies only the selected photos to a private run folder, opens each copy in ON1, sets its individual exposure, contrast, saturation and temperature controls, and runs ON1's JPEG export at your chosen long-edge size. It checks that each output exists and that its dimensions match. The first run asks macOS to allow ON1 Editor to control other apps. On this Mac the switch is in **System Settings → Privacy & Security → Device Control and Data Access**; older macOS versions call it **Accessibility**. ON1 must remain open and the Mac unlocked while it works. The run stops if ON1's controls do not match the verified sequence; it does not guess at a changed control.
 
 JPEG, PNG, HEIC/HEIF, TIFF and several RAW formats are accepted when macOS ImageIO can decode the camera file. RAW export renders from the full image, with a size check to avoid silently exporting an embedded low-resolution preview. Camera support varies with macOS; an unsupported RAW yields an error and is not exported. Unreadable files are skipped during import. The current renderer writes 8-bit sRGB JPEGs and does not expose RAW development controls such as demosaicing or white balance.
 
-All previews and trip preferences stay in `~/Library/Application Support/ON1Editor/`. ON1 handoffs are placed only in the destination you choose. No image or preference is uploaded. The app does not modify ON1 sidecars or presets.
+All previews, trip preferences and ON1 run copies stay in `~/Library/Application Support/ON1Editor/`. The chosen export folder receives the ON1-rendered JPEGs. No image or preference is uploaded. The automation edits copies and does not write ON1 sidecars or presets itself.
 
 ## What is implemented
 
@@ -46,11 +46,11 @@ All previews and trip preferences stay in `~/Library/Application Support/ON1Edit
 - Per-image, renderer-independent edit plans and a native JPEG renderer.
 - Post-render consistency score with review/outlier states.
 - Stored corrections and modest preference learning within a trip.
-- ON1 Photo RAW 2026 handoff with selected copies, separate references, per-photo `.cube` looks, edit plans, previews, and automatic opening of the copy folder.
+- ON1 Photo RAW 2026 desktop automation: per-photo Edit controls, JPEG export to a selected folder, long-edge resolution, output checks, and a local run report.
 
 ## Current limits
 
-The lighting classes are based on luminance. There is no semantic scene understanding, face or skin detection, local masking, advanced RAW development, or lens correction. The simple renderer and generated LUTs use global 8-bit sRGB-like adjustments; colour-critical use should wait for a colour-managed, higher-bit-depth renderer. ON1's RAW pipeline and LUT stage can produce a different result from the native preview. Confidence is a heuristic rather than a calibrated probability. The review list is shown by status in the photo sidebar, with no review-only filter yet. This milestone has not been validated against a representative set of real camera RAW files. ON1 handoff is automated, but applying each photo's look and exporting from ON1 remain manual because no supported per-photo edit API has been verified.
+The lighting classes are based on luminance. There is no semantic scene understanding, face or skin detection, local masking, advanced RAW development, or lens correction in the native renderer. ON1's RAW pipeline can produce a different result from the native preview. Confidence is a heuristic rather than a calibrated probability. This milestone has not been validated against a representative set of real camera RAW files. ON1 automation targets the verified 2026.5 desktop layout and needs macOS Accessibility access; an ON1 update may require adapting the controls. The app currently checks file existence and dimensions after ON1 export, but does not rescore the ON1-rendered image or automatically refine a second pass. The per-photo edits are exported, and the single-photo session is closed afterward; ON1 sidecars for those staged copies are not retained.
 
 The [architecture and next milestone](docs/ARCHITECTURE.md) and [open-source reuse findings](docs/RESEARCH.md) record the boundaries and remaining investigations.
 
@@ -61,7 +61,7 @@ swift build
 sh Scripts/self-test.sh
 ```
 
-The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, and the ON1 workspace and LUT output. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
+The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, ON1 control mapping, and the ON1 workspace and LUT output. ON1's Edit and Export sequence was also exercised on disposable JPEGs; one test export was verified at 600 × 400 pixels. Full automation needs Accessibility permission and remains unverified until that permission is granted to the installed app. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
 
 ## Project status
 

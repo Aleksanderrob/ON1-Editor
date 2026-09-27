@@ -14,6 +14,7 @@ final class TripViewModel: ObservableObject {
     @Published var draftCorrection = Correction()
     @Published var isBusy = false
     @Published var lastHandoffURL: URL?
+    @Published var lastON1RunURL: URL?
     @Published var message = "Choose a trip folder to begin."
     @Published var showError = false
     @Published var errorText = ""
@@ -79,7 +80,7 @@ final class TripViewModel: ObservableObject {
                 message = photos.isEmpty ? "No readable photos found." :
                     "\(photos.count) photos ready. Choose one or more references."
                 if unreadableCount > 0 { message += " \(unreadableCount) unreadable file(s) skipped." }
-                if !preferences.referenceIDs.isEmpty { rebuild() }
+                if !preferences.referenceIDs.isEmpty || !externalReferences.isEmpty { rebuild() }
             } catch { report(error) }
         }
     }
@@ -337,6 +338,48 @@ final class TripViewModel: ObservableObject {
                     }
                 } else {
                     message = "ON1 workspace is ready, but ON1 Photo RAW 2026 was not found."
+                }
+            } catch { report(error) }
+        }
+    }
+
+    func automateInON1() {
+        guard let folderURL else { return }
+        let selectedPhotos = photos.filter { isSelected($0.id) && $0.plan != nil }
+        guard !selectedPhotos.isEmpty else {
+            reportMessage("Choose JPEG references and photos to edit first.")
+            return
+        }
+        let requestedSize = preferences.exportOriginal ? nil : preferences.exportLongEdge
+        if let requestedSize, !(256...20000).contains(requestedSize) {
+            reportMessage("Choose a long edge between 256 and 20,000 pixels.")
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Export ON1 photos here"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        let tripPath = folderURL.standardizedFileURL.path
+        let destinationPath = destination.standardizedFileURL.path
+        guard destinationPath != tripPath && !destinationPath.hasPrefix(tripPath + "/") else {
+            reportMessage("Choose an export folder outside the trip to keep originals and exports separate.")
+            return
+        }
+        isBusy = true
+        message = "Preparing selected photo copies for ON1…"
+        Task {
+            do {
+                let result = try await ON1Automation.run(selected: selectedPhotos,
+                    destination: destination, longEdge: requestedSize) { progress in
+                    Task { @MainActor in self.message = progress }
+                }
+                isBusy = false
+                lastON1RunURL = result.runFolder
+                message = "ON1 exported \(result.exportedCount) of \(selectedPhotos.count) selected photos"
+                if result.failedCount > 0 {
+                    reportMessage("ON1 exported \(result.exportedCount) photo(s). \(result.failedCount) stopped: \(result.items.first(where: { $0.error != nil })?.error ?? "Unknown error")")
                 }
             } catch { report(error) }
         }

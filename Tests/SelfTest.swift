@@ -25,6 +25,11 @@ struct SelfTest {
         let dim = StyleEngine.plan(for: photo("dim", metrics(0.28)), profile: profile)
         let bright = StyleEngine.plan(for: photo("bright", metrics(0.75)), profile: profile)
         let night = StyleEngine.plan(for: photo("night", metrics(0.12)), profile: profile)
+        let controls = ON1ControlValues(dim)
+        try expect(Double(controls.exposure) == (dim.exposureEV * 100).rounded() / 100,
+                   "ON1 receives the individual exposure plan")
+        try expect(Int(controls.contrast) != nil && Int(controls.saturation) != nil &&
+                   Int(controls.temperature) != nil, "ON1 receives valid tone and colour controls")
         try expect(dim.exposureEV > 0 && bright.exposureEV < 0, "Image-specific exposure directions")
         try expect(night.exposureEV < 1, "Low-light scene is not forced into daylight")
         try expect(StyleEngine.plan(for: reference, profile: profile) == .identity,
@@ -104,7 +109,7 @@ struct SelfTest {
                    "Individual LUT has a complete colour cube")
         try expect(lines[4] == "0.000000 0.000000 0.000000" &&
                    lines.last == "1.000000 1.000000 1.000000", "Identity LUT preserves endpoints")
-        print("Self-test passed: planning, JPEG rendering, and ON1 handoff")
+        print("Self-test passed: planning, JPEG rendering, ON1 controls, and handoff")
     }
 
     private static func XCTUnwrapStyle<T>(_ value: T?) throws -> T {
