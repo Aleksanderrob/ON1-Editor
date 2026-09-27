@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 swift build --disable-sandbox
 binary_dir="$(swift build --show-bin-path --disable-sandbox)"
-app_path="$PWD/.build/ON1Editor.app"
+app_path="${ON1_EDITOR_APP_PATH:-$PWD/.build/ON1Editor.app}"
 mkdir -p "$app_path/Contents/MacOS"
 cp "$binary_dir/ON1Editor" "$app_path/Contents/MacOS/ON1Editor"
 cat > "$app_path/Contents/Info.plist" <<'PLIST'
@@ -16,8 +16,8 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>ON1 Editor</string>
   <key>CFBundleExecutable</key><string>ON1Editor</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>0.3.0</string>
+  <key>CFBundleVersion</key><string>3</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

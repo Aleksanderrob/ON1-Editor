@@ -20,6 +20,9 @@ struct ContentView: View {
                 if model.isBusy { ProgressView().controlSize(.small) }
                 Text(model.message).lineLimit(1)
                 Spacer()
+                if model.lastHandoffURL != nil {
+                    Button("Show ON1 Workspace") { model.showLastHandoff() }
+                }
                 if !model.photos.isEmpty {
                     Text("\(model.selectedCount) selected  ·  \(model.referenceCount) references  ·  \(model.reviewCount) to review")
                 }
@@ -38,32 +41,40 @@ struct ContentView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "camera.filters").font(.title2)
-            Text("ON1 Editor").font(.headline)
-            if let folder = model.folderURL {
-                Text(folder.lastPathComponent).foregroundStyle(.secondary).lineLimit(1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                Image(systemName: "camera.filters").font(.title2)
+                Text("ON1 Editor").font(.headline)
+                if let folder = model.folderURL {
+                    Text(folder.lastPathComponent).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                Button("Open Trip…", systemImage: "folder") { model.chooseFolder() }
+                Button("Add JPEG References…", systemImage: "star") { model.addReferenceJPEGs() }
+                    .disabled(model.folderURL == nil || model.isBusy)
             }
-            Spacer()
-            Button("Open Trip…", systemImage: "folder") { model.chooseFolder() }
-            Button("Add JPEG References…", systemImage: "star") { model.addReferenceJPEGs() }
-                .disabled(model.folderURL == nil || model.isBusy)
-            Toggle("Original size", isOn: Binding(
-                get: { model.preferences.exportOriginal },
-                set: { model.setExportOriginal($0) }
-            ))
-            .toggleStyle(.checkbox)
-            .disabled(model.photos.isEmpty || model.isBusy)
-            if !model.preferences.exportOriginal {
-                TextField("Long edge", value: Binding(
-                    get: { model.preferences.exportLongEdge },
-                    set: { model.setExportLongEdge($0) }
-                ), format: .number)
-                .frame(width: 68)
-                Text("px long edge").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Toggle("Original size", isOn: Binding(
+                    get: { model.preferences.exportOriginal },
+                    set: { model.setExportOriginal($0) }
+                ))
+                .toggleStyle(.checkbox)
+                .disabled(model.photos.isEmpty || model.isBusy)
+                if !model.preferences.exportOriginal {
+                    TextField("Long edge", value: Binding(
+                        get: { model.preferences.exportLongEdge },
+                        set: { model.setExportLongEdge($0) }
+                    ), format: .number)
+                    .frame(width: 68)
+                    Text("px long edge").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Export Edited JPEGs…", systemImage: "square.and.arrow.up") { model.exportEdited() }
+                    .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
+                Button("Prepare for ON1…", systemImage: "arrow.up.right.square") { model.prepareForON1() }
+                    .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
+                    .help("Copy selected photos, reference images and individual looks into a separate ON1 workspace")
             }
-            Button("Export Selected…", systemImage: "square.and.arrow.up") { model.exportEdited() }
-                .disabled(model.isBusy || model.photos.allSatisfy { $0.plan == nil })
         }
         .padding(14)
     }

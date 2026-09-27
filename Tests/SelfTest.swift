@@ -79,7 +79,32 @@ struct SelfTest {
         let smallImage = CGImageSourceCreateImageAtIndex(smallSource, 0, nil)!
         try expect(max(smallImage.width, smallImage.height) == 32,
                    "Requested long-edge export size is respected")
-        print("Self-test passed: planning, learning, evaluation, and JPEG rendering")
+
+        let staged = PhotoRecord(id: "selected", sourceURL: input, previewURL: input,
+            capturedAt: nil, pixelWidth: 64, pixelHeight: 64, metrics: before,
+            plan: .identity, result: nil, editedPreviewURL: output)
+        let referenceCopy = PhotoRecord(id: "reference", sourceURL: output, previewURL: output,
+            capturedAt: nil, pixelWidth: 64, pixelHeight: 64, metrics: after,
+            plan: nil, result: nil, editedPreviewURL: nil)
+        let handoff = try ON1Bridge.prepare(selected: [staged], references: [referenceCopy],
+            in: temp, exportLongEdge: 2048)
+        let manifestURL = handoff.packageURL.appendingPathComponent("Handoff.json")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let manifest = try decoder.decode(ON1HandoffManifest.self, from: Data(contentsOf: manifestURL))
+        try expect(manifest.selected.count == 1 && manifest.references.count == 1 &&
+                   manifest.exportLongEdge == 2048, "ON1 handoff records selected photo, reference and size")
+        let item = manifest.selected[0]
+        try expect(FileManager.default.fileExists(atPath:
+            handoff.photosURL.appendingPathComponent(item.photo).path), "Selected photo is copied")
+        let cube = try String(contentsOf: handoff.packageURL
+            .appendingPathComponent("Individual Looks").appendingPathComponent(item.look), encoding: .utf8)
+        let lines = cube.split(separator: "\n")
+        try expect(lines.count == 4 + CubeLUT.dimension * CubeLUT.dimension * CubeLUT.dimension,
+                   "Individual LUT has a complete colour cube")
+        try expect(lines[4] == "0.000000 0.000000 0.000000" &&
+                   lines.last == "1.000000 1.000000 1.000000", "Identity LUT preserves endpoints")
+        print("Self-test passed: planning, JPEG rendering, and ON1 handoff")
     }
 
     private static func XCTUnwrapStyle<T>(_ value: T?) throws -> T {

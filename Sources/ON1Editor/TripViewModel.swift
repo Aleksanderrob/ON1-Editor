@@ -13,6 +13,7 @@ final class TripViewModel: ObservableObject {
     @Published var preferences = TripPreferences()
     @Published var draftCorrection = Correction()
     @Published var isBusy = false
+    @Published var lastHandoffURL: URL?
     @Published var message = "Choose a trip folder to begin."
     @Published var showError = false
     @Published var errorText = ""
@@ -284,6 +285,66 @@ final class TripViewModel: ObservableObject {
             message = "Exported \(summary.0) JPEGs · \(summary.1) existing skipped · \(summary.2) errors"
             if summary.2 > 0, let error = summary.3 { reportMessage(error) }
         }
+    }
+
+    func prepareForON1() {
+        guard let folderURL else { return }
+        let selectedPhotos = photos.filter { isSelected($0.id) && $0.plan != nil }
+        guard !selectedPhotos.isEmpty else {
+            reportMessage("Choose references and photos to edit before preparing ON1.")
+            return
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Create ON1 workspace"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        let tripPath = folderURL.standardizedFileURL.path
+        let destinationPath = destination.standardizedFileURL.path
+        guard destinationPath != tripPath && !destinationPath.hasPrefix(tripPath + "/") else {
+            reportMessage("Choose a location outside the trip folder to avoid duplicate photos in the trip.")
+            return
+        }
+        let references = photos.filter { preferences.referenceIDs.contains($0.id) } + externalReferences
+        let requestedSize = preferences.exportOriginal ? nil : preferences.exportLongEdge
+        if let requestedSize, !(256...20000).contains(requestedSize) {
+            reportMessage("Choose a long edge between 256 and 20,000 pixels.")
+            return
+        }
+        isBusy = true
+        message = "Preparing copies and individual looks for ON1…"
+        Task {
+            do {
+                let handoff = try await Task.detached(priority: .userInitiated) {
+                    try ON1Bridge.prepare(selected: selectedPhotos, references: references,
+                        in: destination, exportLongEdge: requestedSize)
+                }.value
+                isBusy = false
+                lastHandoffURL = handoff.packageURL
+                NSWorkspace.shared.activateFileViewerSelecting([handoff.photosURL])
+                if let application = ON1Bridge.installedApplication() {
+                    let configuration = NSWorkspace.OpenConfiguration()
+                    NSWorkspace.shared.open([handoff.photosURL], withApplicationAt: application,
+                                            configuration: configuration) { _, error in
+                        Task { @MainActor in
+                            if let error {
+                                self.reportMessage("Workspace ready, but ON1 did not open: \(error.localizedDescription). Choose Browse Folder manually.")
+                            } else {
+                                self.message = "\(handoff.count) copies ready. In ON1, use Browse Folder for Photos to Edit."
+                            }
+                        }
+                    }
+                } else {
+                    message = "ON1 workspace is ready, but ON1 Photo RAW 2026 was not found."
+                }
+            } catch { report(error) }
+        }
+    }
+
+    func showLastHandoff() {
+        guard let lastHandoffURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([lastHandoffURL.appendingPathComponent("Photos to Edit")])
     }
 
     private func loadDraft() { draftCorrection = preferences.corrections[selectedID ?? ""] ?? Correction() }

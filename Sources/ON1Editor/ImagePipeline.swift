@@ -175,26 +175,16 @@ private enum PixelRenderer {
             return true
         }
         guard drawn else { throw ImagePipelineError.unreadable(source) }
-        let exposure = pow(2, plan.exposureEV)
-        let redGain = 1 + plan.warmth * 0.28
-        let blueGain = 1 - plan.warmth * 0.28
-        func clip(_ value: Double) -> Double { min(max(value, 0), 1) }
         for offset in stride(from: 0, to: pixels.count, by: 4) {
             let alpha = Double(pixels[offset + 3]) / 255
             if alpha < 0.001 { continue }
-            var r = min(Double(pixels[offset]) / 255 / alpha, 1) * exposure
-            var g = min(Double(pixels[offset + 1]) / 255 / alpha, 1) * exposure
-            var b = min(Double(pixels[offset + 2]) / 255 / alpha, 1) * exposure
-            r = (r - 0.5) * plan.contrast + 0.5
-            g = (g - 0.5) * plan.contrast + 0.5
-            b = (b - 0.5) * plan.contrast + 0.5
-            let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-            r = clip((luma + (r - luma) * plan.saturation) * redGain)
-            g = clip(luma + (g - luma) * plan.saturation)
-            b = clip((luma + (b - luma) * plan.saturation) * blueGain)
-            pixels[offset] = UInt8((r * alpha * 255).rounded())
-            pixels[offset + 1] = UInt8((g * alpha * 255).rounded())
-            pixels[offset + 2] = UInt8((b * alpha * 255).rounded())
+            let colour = PixelAdjustment.apply(
+                red: min(Double(pixels[offset]) / 255 / alpha, 1),
+                green: min(Double(pixels[offset + 1]) / 255 / alpha, 1),
+                blue: min(Double(pixels[offset + 2]) / 255 / alpha, 1), plan: plan)
+            pixels[offset] = UInt8((colour.0 * alpha * 255).rounded())
+            pixels[offset + 1] = UInt8((colour.1 * alpha * 255).rounded())
+            pixels[offset + 2] = UInt8((colour.2 * alpha * 255).rounded())
         }
         let data = Data(pixels) as CFData
         guard let provider = CGDataProvider(data: data),
