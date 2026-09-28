@@ -26,7 +26,7 @@ If a synced folder adds Finder metadata to a built app and disrupts signature ve
 
 ## First trip
 
-1. Choose **Open Trip…** and select a folder. Nested folders are included. ImageIO generates cached previews and reads capture dates where available.
+1. Drop a photo folder into the window, choose **Open Trip…**, or paste the folder's location into the opening screen. Nested folders are included. ImageIO generates cached previews and reads capture dates where available.
 2. Mark reference photos with the stars in the trip list, or choose **Add JPEG References…** to select JPEGs from another folder. Five reference JPEGs work as well as one; the app uses their median measurements and prefers matching lighting classes. It saves local copies of outside JPEG references so reopening a trip does not depend on access to the original folder. References saved by older builds must be selected once more.
 3. Mark photos to edit with the checkboxes. **RAW only** selects only RAW files; **All** and **None** reset the selection. JPEG references can remain unselected while RAW files receive edit plans.
 4. Review each original and edited preview. The app plans exposure, contrast, saturation and warmth separately for every selected photo, then compares the rendered preview with the target. Images marked **Review** or **Outlier** deserve attention.
@@ -62,7 +62,7 @@ swift build
 sh Scripts/self-test.sh
 ```
 
-The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, ON1 control mapping, persistence of an imported JPEG reference, and the ON1 workspace and LUT output. ON1's Edit and Export sequence was exercised manually on disposable JPEGs; one test export was verified at 600 × 400 pixels. The app-level automation reached ON1 after Accessibility access was granted, but ON1 Photo RAW became unresponsive while loading its Home screen, before it opened the selected test photo. End-to-end automated export therefore remains unverified on this Mac. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
+The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, ON1 control mapping, persistence of an imported JPEG reference, and the ON1 workspace and LUT output. ON1's Edit and Export sequence was exercised manually on disposable JPEGs; one test export was verified at 600 × 400 pixels. The app-level automation opened and edited a selected test JPEG in ON1 and reached its export destination picker. An incorrect picker-title assumption stopped that run; the picker handling has since been corrected. A complete app-driven export is still unverified on this Mac while the new app identity awaits macOS control access. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
 
 ## Project status
 

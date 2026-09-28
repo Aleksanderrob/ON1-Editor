@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var model: TripViewModel
+    @State private var tripFolderPath = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,6 +42,11 @@ struct ContentView: View {
         .alert("ON1 Editor", isPresented: $model.showError) {
             Button("OK") { }
         } message: { Text(model.errorText) }
+        .dropDestination(for: URL.self) { folders, _ in
+            guard let folder = folders.first else { return false }
+            model.openFolder(folder)
+            return true
+        }
     }
 
     private var toolbar: some View {
@@ -214,8 +220,17 @@ struct ContentView: View {
             }
             .padding(20)
         } else {
-            ContentUnavailableView("Open a trip folder", systemImage: "photo.on.rectangle.angled",
-                description: Text("Choose a folder of travel photos to start building a consistent look."))
+            VStack(spacing: 14) {
+                ContentUnavailableView("Open a trip folder", systemImage: "photo.on.rectangle.angled",
+                    description: Text("Drop a folder of travel photos here to start building a consistent look."))
+                HStack {
+                    TextField("Paste a folder location", text: $tripFolderPath)
+                        .onSubmit { model.openFolderPath(tripFolderPath) }
+                    Button("Open") { model.openFolderPath(tripFolderPath) }
+                }
+                .frame(maxWidth: 420)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

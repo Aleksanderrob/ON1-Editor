@@ -23,6 +23,6 @@ The profile uses medians to reduce the effect of one unusual reference. The plan
 3. Validate the basic ImageIO RAW export against actual cameras, then add a higher-bit-depth RAW decode/render path with colour, orientation, metadata and lens corrections.
 4. Add a scene-aware reference representation and richer edit vocabulary, then local masks and colour-managed rendering.
 5. Prototype AceTone/LUT grading on a small image set and compare it with image-specific corrections before choosing an integration.
-6. Resolve ON1 Photo RAW's Home-screen launch hang on the test Mac, then validate the Accessibility path on representative RAW formats. Keep its controls version-specific and fail closed if the interface changes. The current automation does not write undocumented ON1 files.
+6. Finish a complete app-driven export test after macOS grants control access to the new app identity, then validate the Accessibility path on representative RAW formats. ON1 Photo RAW has intermittently stalled on its Home screen on the test Mac. Keep its controls version-specific and fail closed if the interface changes. The current automation does not write undocumented ON1 files.
 
 The [research notes](RESEARCH.md) explain why the external modules are staged this way.

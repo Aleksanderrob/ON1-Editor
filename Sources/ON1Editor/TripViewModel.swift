@@ -30,11 +30,33 @@ final class TripViewModel: ObservableObject {
 
     func chooseFolder() {
         let panel = NSOpenPanel()
-        panel.canChooseFiles = false
+        // Some macOS open-panel versions keep the confirmation button disabled
+        // when file selection is turned off, even for a selected folder.
+        panel.canChooseFiles = true
         panel.canChooseDirectories = true
+        panel.allowedContentTypes = [.folder]
         panel.allowsMultipleSelection = false
         panel.prompt = "Open trip"
-        if panel.runModal() == .OK, let url = panel.url { open(url) }
+        if panel.runModal() == .OK, let url = panel.url { openFolder(url) }
+    }
+
+    func openFolder(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            reportMessage("Choose a folder containing your trip photos.")
+            return
+        }
+        open(url)
+    }
+
+    func openFolderPath(_ path: String) {
+        let expanded = (path.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        guard !expanded.isEmpty else {
+            reportMessage("Paste a trip folder location to open it.")
+            return
+        }
+        openFolder(URL(fileURLWithPath: expanded))
     }
 
     func open(_ folder: URL) {

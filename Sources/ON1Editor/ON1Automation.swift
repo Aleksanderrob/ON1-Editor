@@ -238,7 +238,9 @@ private final class ON1Accessibility {
     }
 
     private func chooseFolder(_ url: URL) throws {
-        try waitForWindow(containing: "Open", timeout: 10)
+        // ON1 labels this system picker "Choose the destination directory".
+        // Its title differs from the picker used for opening a photo.
+        _ = try waitFor(identifierSuffix: "OKButton", timeout: 10)
         sendKey(5, flags: [.maskCommand, .maskShift])
         let path = try waitFor(identifierSuffix: "PathTextField", timeout: 8)
         try setValue(path, url.path)
