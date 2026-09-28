@@ -62,6 +62,21 @@ struct ContentView: View {
                 Button("Add JPEG References…", systemImage: "star") { model.addReferenceJPEGs() }
                     .disabled(model.folderURL == nil || model.isBusy)
             }
+            HStack(spacing: 10) {
+                Text("Export folder").font(.caption).foregroundStyle(.secondary)
+                TextField("Choose an output folder", text: Binding(
+                    get: { model.preferences.exportFolderPath },
+                    set: { model.setExportFolderPath($0) }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .disabled(model.folderURL == nil || model.isBusy)
+                Button("Browse…") { model.chooseExportFolder() }
+                    .disabled(model.folderURL == nil || model.isBusy)
+            }
+            .dropDestination(for: URL.self) { folders, _ in
+                guard let folder = folders.first else { return false }
+                return model.setExportFolder(folder)
+            }
             HStack(spacing: 12) {
                 Toggle("Original size", isOn: Binding(
                     get: { model.preferences.exportOriginal },

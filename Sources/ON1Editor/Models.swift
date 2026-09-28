@@ -86,11 +86,12 @@ struct TripPreferences: Codable, Sendable {
     var corrections: [String: Correction] = [:]
     var exportOriginal = true
     var exportLongEdge = 3000
+    var exportFolderPath = ""
 
     init() {}
 
     private enum CodingKeys: String, CodingKey {
-        case referenceIDs, externalReferencePaths, selectedIDs, corrections, exportOriginal, exportLongEdge
+        case referenceIDs, externalReferencePaths, selectedIDs, corrections, exportOriginal, exportLongEdge, exportFolderPath
     }
 
     init(from decoder: Decoder) throws {
@@ -101,5 +102,6 @@ struct TripPreferences: Codable, Sendable {
         corrections = try values.decodeIfPresent([String: Correction].self, forKey: .corrections) ?? [:]
         exportOriginal = try values.decodeIfPresent(Bool.self, forKey: .exportOriginal) ?? true
         exportLongEdge = try values.decodeIfPresent(Int.self, forKey: .exportLongEdge) ?? 3000
+        exportFolderPath = try values.decodeIfPresent(String.self, forKey: .exportFolderPath) ?? ""
     }
 }

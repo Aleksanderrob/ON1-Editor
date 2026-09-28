@@ -17,7 +17,7 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>ON1Editor</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.5.3</string>
-  <key>CFBundleVersion</key><string>14</string>
+  <key>CFBundleVersion</key><string>17</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

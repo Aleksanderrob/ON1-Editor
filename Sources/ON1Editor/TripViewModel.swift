@@ -69,6 +69,11 @@ final class TripViewModel: ObservableObject {
         referencesNeedReimportCount = 0
         selectedID = nil
         preferences = TripStore.load(for: folder)
+        if preferences.exportFolderPath.isEmpty {
+            preferences.exportFolderPath = folder.deletingLastPathComponent()
+                .appendingPathComponent("ON1 Edited", isDirectory: true).path
+            persist()
+        }
         isBusy = true
         message = "Finding and analysing photos…"
         Task {
@@ -209,6 +214,54 @@ final class TripViewModel: ObservableObject {
         persist()
     }
 
+    func setExportFolderPath(_ path: String) {
+        preferences.exportFolderPath = path
+        persist()
+    }
+
+    @discardableResult
+    func setExportFolder(_ folder: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return false }
+        setExportFolderPath(folder.standardizedFileURL.path)
+        return true
+    }
+
+    func chooseExportFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.folder]
+        panel.prompt = "Use this export folder"
+        if panel.runModal() == .OK, let folder = panel.url {
+            _ = setExportFolder(folder)
+        }
+    }
+
+    private func exportDestination() -> URL? {
+        guard let trip = folderURL else { return nil }
+        let expanded = (preferences.exportFolderPath.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        guard !expanded.isEmpty else {
+            reportMessage("Choose an export folder first.")
+            return nil
+        }
+        let destination = URL(fileURLWithPath: expanded, isDirectory: true).standardizedFileURL
+        let tripPath = trip.standardizedFileURL.path
+        let destinationPath = destination.path
+        guard destinationPath != tripPath && !destinationPath.hasPrefix(tripPath + "/") else {
+            reportMessage("Choose an export folder outside the trip to keep originals and exports separate.")
+            return nil
+        }
+        do {
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            return destination
+        } catch {
+            report(error)
+            return nil
+        }
+    }
+
     func applyCorrection() {
         guard let id = selectedID else { return }
         if draftCorrection.isZero { preferences.corrections.removeValue(forKey: id) }
@@ -295,12 +348,7 @@ final class TripViewModel: ObservableObject {
             reportMessage("Choose a long edge between 256 and 20,000 pixels.")
             return
         }
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "Export here"
-        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        guard let destination = exportDestination() else { return }
         isBusy = true
         message = "Exporting edited JPEGs…"
         let items = photos
@@ -347,7 +395,8 @@ final class TripViewModel: ObservableObject {
         }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.folder]
         panel.canCreateDirectories = true
         panel.prompt = "Create ON1 workspace"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
@@ -405,12 +454,7 @@ final class TripViewModel: ObservableObject {
             reportMessage("Choose a long edge between 256 and 20,000 pixels.")
             return
         }
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "Export ON1 photos here"
-        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        guard let destination = exportDestination() else { return }
         let tripPath = folderURL.standardizedFileURL.path
         let destinationPath = destination.standardizedFileURL.path
         guard destinationPath != tripPath && !destinationPath.hasPrefix(tripPath + "/") else {

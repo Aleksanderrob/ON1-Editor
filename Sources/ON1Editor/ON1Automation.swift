@@ -211,10 +211,11 @@ private final class ON1Accessibility {
             try selectMenuValue("PLExportResizePane.mPane0.mBody.controls.primary.widget.mResizeType.mComboBox",
                                 expected: "Long Edge")
             try setField("PLExportResizePane.mPane0.mBody.controls.primary.mStackedWidget.longEdgePage.widget_7.widget_16.widget_15.mLongEdgeEdit",
-                         to: String(longEdge))
+                         to: String(longEdge), commitWithTab: true)
         }
         try deselectExportPreset()
         try press(identifierSuffix: "PLExportDlg2.bottomLayout.exportBtn")
+        try confirmPresetChangesWithoutSaving()
         try waitForWindow(containing: "Develop (", timeout: 20)
         let deadline = Date().addingTimeInterval(90)
         var dimensions: (Int, Int)?
@@ -312,10 +313,34 @@ private final class ON1Accessibility {
         }
     }
 
-    private func setField(_ identifier: String, to value: String) throws {
+    private func confirmPresetChangesWithoutSaving() throws {
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            guard let front = windows().first else {
+                Thread.sleep(forTimeInterval: 0.2)
+                continue
+            }
+            if (title(of: front) ?? "").contains("Develop (") { return }
+            if let prompt = tree(front).first(where: {
+                (value(of: $0) as? String)?.contains("The settings for preset") == true
+            }) {
+                guard (value(of: prompt) as? String)?.contains("Do you want to save them?") == true else {
+                    throw ON1AutomationError.ui("Unexpected ON1 preset confirmation")
+                }
+                // No declines changing the user's preset; ON1 still performs this export.
+                try press(identifierSuffix: "OnOneMessageBox.qt_msgbox_buttonbox.QPushButton", title: "No")
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        throw ON1AutomationError.ui("ON1 did not start the export")
+    }
+
+    private func setField(_ identifier: String, to value: String,
+                          commitWithTab: Bool = false) throws {
         let field = try required(identifier)
         try setValue(field, value)
-        sendKey(36)
+        sendKey(commitWithTab ? 48 : 36)
         let committed = try required(identifier)
         guard let actual = self.value(of: committed) as? String,
               Double(actual) == Double(value) else {
