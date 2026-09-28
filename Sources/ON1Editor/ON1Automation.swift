@@ -175,15 +175,32 @@ private final class ON1Accessibility {
     func export(to folder: URL, longEdge: Int?, expected: URL) throws {
         let exportTitle = "Export - 1 Photo"
         try waitForWindow(containing: exportTitle, timeout: 15)
-        let destinationLabel = try required("PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.pathLabel")
-        if (value(of: destinationLabel) as? String) != folder.path {
-            try press(identifierSuffix: "PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.mChooseButton")
-            try chooseFolder(folder)
-            try waitForWindow(containing: exportTitle, timeout: 15)
-        }
-        let currentDestination = try required("PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.pathLabel")
-        guard (value(of: currentDestination) as? String) == folder.path else {
-            throw ON1AutomationError.ui("Export destination was not selected")
+        let saveTo = try required("PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.saveToWidget.mSaveToComboBox.mComboBox")
+        let rendered: URL
+        switch title(of: saveTo) {
+        case "Other Folder":
+            let destinationLabel = try required("PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.pathLabel")
+            if (value(of: destinationLabel) as? String) != folder.path {
+                try press(identifierSuffix: "PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.mChooseButton")
+                try chooseFolder(folder)
+                try waitForWindow(containing: exportTitle, timeout: 15)
+            }
+            let currentDestination = try required("PLExportLocationPane.locationPane.mBody.locationWidget.widget_3.pathChooseWidget.pathLabel")
+            guard (value(of: currentDestination) as? String) == folder.path else {
+                throw ON1AutomationError.ui("Export destination was not selected")
+            }
+            rendered = expected
+        case "Desktop":
+            // ON1's destination menu is not exposed through Accessibility on some builds.
+            // Export under a unique run name, then move that JPEG into the selected folder.
+            rendered = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Desktop", isDirectory: true)
+                .appendingPathComponent(expected.lastPathComponent)
+            guard !FileManager.default.fileExists(atPath: rendered.path) else {
+                throw ON1AutomationError.ui("A temporary Desktop export already exists")
+            }
+        default:
+            throw ON1AutomationError.ui("ON1's export location must be Desktop or Other Folder")
         }
         try selectMenuValue("PLExportFileTypePane.mPane0.mBody.mPaneControls0.fileTypeWidget.mFileTypeComboBox.mComboBox",
                             expected: "JPEG")
@@ -196,13 +213,14 @@ private final class ON1Accessibility {
             try setField("PLExportResizePane.mPane0.mBody.controls.primary.mStackedWidget.longEdgePage.widget_7.widget_16.widget_15.mLongEdgeEdit",
                          to: String(longEdge))
         }
+        try deselectExportPreset()
         try press(identifierSuffix: "PLExportDlg2.bottomLayout.exportBtn")
         try waitForWindow(containing: "Develop (", timeout: 20)
         let deadline = Date().addingTimeInterval(90)
         var dimensions: (Int, Int)?
         while Date() < deadline {
-            if FileManager.default.fileExists(atPath: expected.path),
-               let source = CGImageSourceCreateWithURL(expected as CFURL, nil),
+            if FileManager.default.fileExists(atPath: rendered.path),
+               let source = CGImageSourceCreateWithURL(rendered as CFURL, nil),
                let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
                let width = properties[kCGImagePropertyPixelWidth] as? Int,
                let height = properties[kCGImagePropertyPixelHeight] as? Int {
@@ -214,6 +232,9 @@ private final class ON1Accessibility {
         guard let dimensions,
               longEdge == nil || abs(max(dimensions.0, dimensions.1) - longEdge!) <= 1 else {
             throw ON1AutomationError.exportMissing(expected.lastPathComponent)
+        }
+        if rendered != expected {
+            try FileManager.default.moveItem(at: rendered, to: expected)
         }
     }
 
@@ -265,12 +286,29 @@ private final class ON1Accessibility {
 
     private func selectMenuValue(_ identifier: String, expected: String) throws {
         let control = try required(identifier)
-        if (value(of: control) as? String) == expected { return }
+        if (value(of: control) as? String) == expected || title(of: control) == expected { return }
         try click(control)
         let option = try waitFor(title: expected, role: kAXMenuItemRole as String, timeout: 5)
         try click(option)
-        guard (value(of: try required(identifier)) as? String) == expected else {
+        let updated = try required(identifier)
+        guard (value(of: updated) as? String) == expected || title(of: updated) == expected else {
             throw ON1AutomationError.ui("Could not select \(expected)")
+        }
+    }
+
+    private func deselectExportPreset() throws {
+        let marker = "PLExportPresetPanes.mPanes.OnOnePane.mPaneHeader.mHeaderContainer.mOnOffCheckBox"
+        let dialog = try waitForWindow(containing: "Export - 1 Photo", timeout: 5)
+        if let selected = tree(dialog).first(where: {
+            (identifier(of: $0)?.contains(marker) ?? false) && (value(of: $0) as? Int) == 1
+        }) {
+            try click(selected)
+        }
+        let updated = try waitForWindow(containing: "Export - 1 Photo", timeout: 5)
+        guard !tree(updated).contains(where: {
+            (identifier(of: $0)?.contains(marker) ?? false) && (value(of: $0) as? Int) == 1
+        }) else {
+            throw ON1AutomationError.ui("An export preset is still selected")
         }
     }
 

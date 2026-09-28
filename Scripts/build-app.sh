@@ -12,12 +12,12 @@ cat > "$app_path/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>com.aleksanderrob.on1editor.mac</string>
-  <key>CFBundleName</key><string>ON1 Editor 0.5.2</string>
-  <key>CFBundleDisplayName</key><string>ON1 Editor 0.5.2</string>
+  <key>CFBundleName</key><string>ON1 Editor 0.5.3</string>
+  <key>CFBundleDisplayName</key><string>ON1 Editor 0.5.3</string>
   <key>CFBundleExecutable</key><string>ON1Editor</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.5.2</string>
-  <key>CFBundleVersion</key><string>11</string>
+  <key>CFBundleShortVersionString</key><string>0.5.3</string>
+  <key>CFBundleVersion</key><string>14</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
