@@ -9,6 +9,7 @@ final class TripViewModel: ObservableObject {
     @Published var photos: [PhotoRecord] = []
     @Published var externalReferences: [PhotoRecord] = []
     @Published var unreadableCount = 0
+    @Published var referencesNeedReimportCount = 0
     @Published var selectedID: String?
     @Published var preferences = TripPreferences()
     @Published var draftCorrection = Correction()
@@ -43,6 +44,7 @@ final class TripViewModel: ObservableObject {
         photos = []
         externalReferences = []
         unreadableCount = 0
+        referencesNeedReimportCount = 0
         selectedID = nil
         preferences = TripStore.load(for: folder)
         isBusy = true
@@ -50,7 +52,11 @@ final class TripViewModel: ObservableObject {
         Task {
             do {
                 let cache = try TripStore.cacheDirectory()
-                let savedReferencePaths = preferences.externalReferencePaths
+                let referenceDirectory = try TripStore.referenceDirectory()
+                let savedReferencePaths = preferences.externalReferencePaths.filter {
+                    TripStore.isManagedReference(URL(fileURLWithPath: $0), in: referenceDirectory)
+                }
+                let oldReferenceCount = preferences.externalReferencePaths.count - savedReferencePaths.count
                 let contents = await Task.detached(priority: .userInitiated) { () -> ([PhotoRecord], [PhotoRecord], Int) in
                     let files = PhotoLibrary.discover(in: folder)
                     let records = files.compactMap {
@@ -67,6 +73,7 @@ final class TripViewModel: ObservableObject {
                         ($1.capturedAt ?? .distantFuture, $1.id)
                 }
                 externalReferences = contents.1
+                referencesNeedReimportCount = oldReferenceCount
                 unreadableCount = contents.2
                 if preferences.selectedIDs == nil {
                     preferences.selectedIDs = Set(photos.map(\.id))
@@ -80,6 +87,7 @@ final class TripViewModel: ObservableObject {
                 message = photos.isEmpty ? "No readable photos found." :
                     "\(photos.count) photos ready. Choose one or more references."
                 if unreadableCount > 0 { message += " \(unreadableCount) unreadable file(s) skipped." }
+                if oldReferenceCount > 0 { message += " Re-add JPEG references saved by an older version." }
                 if !preferences.referenceIDs.isEmpty || !externalReferences.isEmpty { rebuild() }
             } catch { report(error) }
         }
@@ -106,16 +114,33 @@ final class TripViewModel: ObservableObject {
         panel.allowedContentTypes = [.jpeg]
         panel.prompt = "Add references"
         guard panel.runModal() == .OK else { return }
-        do {
-            let cache = try TripStore.cacheDirectory()
-            let existing = Set(externalReferences.map { $0.sourceURL.standardizedFileURL.path })
-            let added = panel.urls.filter { !existing.contains($0.standardizedFileURL.path) }
-                .compactMap { try? PhotoLibrary.analyzeExternalReference($0, cacheDirectory: cache) }
-            externalReferences.append(contentsOf: added)
-            preferences.externalReferencePaths = externalReferences.map { $0.sourceURL.path }
-            persist()
-            rebuild()
-        } catch { report(error) }
+        let chosen = panel.urls
+        let trip = folderURL
+        isBusy = true
+        message = "Saving JPEG references locally…"
+        Task {
+            do {
+                let cache = try TripStore.cacheDirectory()
+                let directory = try TripStore.referenceDirectory()
+                let added = await Task.detached(priority: .userInitiated) { () -> [PhotoRecord] in
+                    chosen.compactMap { source in
+                        guard let copy = try? TripStore.importReference(source, into: directory) else { return nil }
+                        return try? PhotoLibrary.analyzeExternalReference(copy, cacheDirectory: cache)
+                    }
+                }.value
+                guard folderURL == trip else { return }
+                let existing = Set(externalReferences.map { $0.sourceURL.standardizedFileURL.path })
+                externalReferences.append(contentsOf: added.filter {
+                    !existing.contains($0.sourceURL.standardizedFileURL.path)
+                })
+                referencesNeedReimportCount = 0
+                preferences.externalReferencePaths = externalReferences.map { $0.sourceURL.path }
+                persist()
+                isBusy = false
+                if added.isEmpty { reportMessage("No readable JPEG references were added.") }
+                else { rebuild() }
+            } catch { report(error) }
+        }
     }
 
     func removeExternalReference(_ id: String) {
@@ -233,6 +258,9 @@ final class TripViewModel: ObservableObject {
                 photos = updated
                 isBusy = false
                 message = "\(selectedCount) edits planned · \(reviewCount) to review"
+                if referencesNeedReimportCount > 0 {
+                    message += " Re-add JPEG references saved by an older version."
+                }
             } catch { report(error) }
         }
     }

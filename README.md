@@ -20,13 +20,14 @@ open .build/ON1Editor.app
 ```
 
 The bundle is signed locally with an ad hoc signature. It is not notarized for distribution.
-After building or unzipping the supplied app, you can open it by double-clicking `ON1Editor.app`; normal use does not require Terminal. A Desktop shortcut can point to that app.
+After building or unzipping the supplied app, you can open it by double-clicking the app bundle; normal use does not require Terminal. A Desktop shortcut can point to that app.
+This local signature can require macOS control permission to be granted again after an app update.
 If a synced folder adds Finder metadata to a built app and disrupts signature verification, set `ON1_EDITOR_APP_PATH` to a location outside that folder when running the build script.
 
 ## First trip
 
 1. Choose **Open Trip…** and select a folder. Nested folders are included. ImageIO generates cached previews and reads capture dates where available.
-2. Mark reference photos with the stars in the trip list, or choose **Add JPEG References…** to select JPEGs from another folder. Five reference JPEGs work as well as one; the app uses their median measurements and prefers matching lighting classes.
+2. Mark reference photos with the stars in the trip list, or choose **Add JPEG References…** to select JPEGs from another folder. Five reference JPEGs work as well as one; the app uses their median measurements and prefers matching lighting classes. It saves local copies of outside JPEG references so reopening a trip does not depend on access to the original folder. References saved by older builds must be selected once more.
 3. Mark photos to edit with the checkboxes. **RAW only** selects only RAW files; **All** and **None** reset the selection. JPEG references can remain unselected while RAW files receive edit plans.
 4. Review each original and edited preview. The app plans exposure, contrast, saturation and warmth separately for every selected photo, then compares the rendered preview with the target. Images marked **Review** or **Outlier** deserve attention.
 5. Move the correction sliders on an image and click **Apply Correction**. The saved correction affects that image and contributes a small preference bias to later plans for photos with similar lighting in this trip.
@@ -35,7 +36,7 @@ If a synced folder adds Finder metadata to a built app and disrupts signature ve
 
 JPEG, PNG, HEIC/HEIF, TIFF and several RAW formats are accepted when macOS ImageIO can decode the camera file. RAW export renders from the full image, with a size check to avoid silently exporting an embedded low-resolution preview. Camera support varies with macOS; an unsupported RAW yields an error and is not exported. Unreadable files are skipped during import. The current renderer writes 8-bit sRGB JPEGs and does not expose RAW development controls such as demosaicing or white balance.
 
-All previews, trip preferences and ON1 run copies stay in `~/Library/Application Support/ON1Editor/`. The chosen export folder receives the ON1-rendered JPEGs. No image or preference is uploaded. The automation edits copies and does not write ON1 sidecars or presets itself.
+All previews, imported reference JPEGs, trip preferences and ON1 run copies stay in `~/Library/Application Support/ON1Editor/`. The chosen export folder receives the ON1-rendered JPEGs. No image or preference is uploaded. The automation edits copies and does not write ON1 sidecars or presets itself.
 
 ## What is implemented
 
@@ -61,7 +62,7 @@ swift build
 sh Scripts/self-test.sh
 ```
 
-The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, ON1 control mapping, and the ON1 workspace and LUT output. ON1's Edit and Export sequence was also exercised on disposable JPEGs; one test export was verified at 600 × 400 pixels. Full automation needs Accessibility permission and remains unverified until that permission is granted to the installed app. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
+The standalone self-test checks different plans for bright and dark images, conservative learning from a correction, outlier detection, a real JPEG render from a synthetic image, ON1 control mapping, persistence of an imported JPEG reference, and the ON1 workspace and LUT output. ON1's Edit and Export sequence was exercised manually on disposable JPEGs; one test export was verified at 600 × 400 pixels. The app-level automation reached ON1 after Accessibility access was granted, but ON1 Photo RAW became unresponsive while loading its Home screen, before it opened the selected test photo. End-to-end automated export therefore remains unverified on this Mac. On this development Mac, Swift Package Manager required `--disable-sandbox` and the installed macOS 26.5 SDK because the default SDK and compiler patch levels differ; that is a local toolchain issue.
 
 ## Project status
 

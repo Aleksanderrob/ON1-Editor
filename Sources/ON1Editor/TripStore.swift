@@ -15,6 +15,28 @@ enum TripStore {
         return url
     }
 
+    static func referenceDirectory() throws -> URL {
+        let url = try appDirectory().appendingPathComponent("Reference JPEGs", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    static func isManagedReference(_ url: URL, in directory: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix(directory.standardizedFileURL.path + "/")
+    }
+
+    static func importReference(_ source: URL, into directory: URL) throws -> URL {
+        let data = try Data(contentsOf: source, options: .mappedIfSafe)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let folder = directory.appendingPathComponent(digest, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let copy = folder.appendingPathComponent(source.lastPathComponent)
+        if !FileManager.default.fileExists(atPath: copy.path) {
+            try data.write(to: copy, options: .atomic)
+        }
+        return copy
+    }
+
     static func load(for folder: URL) -> TripPreferences {
         guard let data = try? Data(contentsOf: stateURL(for: folder)),
               let state = try? JSONDecoder().decode(TripPreferences.self, from: data) else {

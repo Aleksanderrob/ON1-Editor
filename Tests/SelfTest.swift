@@ -109,7 +109,16 @@ struct SelfTest {
                    "Individual LUT has a complete colour cube")
         try expect(lines[4] == "0.000000 0.000000 0.000000" &&
                    lines.last == "1.000000 1.000000 1.000000", "Identity LUT preserves endpoints")
-        print("Self-test passed: planning, JPEG rendering, ON1 controls, and handoff")
+        let managed = temp.appendingPathComponent("Reference JPEGs", isDirectory: true)
+        let imported = try TripStore.importReference(output, into: managed)
+        try expect(TripStore.isManagedReference(imported, in: managed),
+                   "Imported JPEG reference is kept in app-managed storage")
+        try expect(try TripStore.importReference(output, into: managed) == imported,
+                   "Importing the same reference reuses its local copy")
+        try FileManager.default.removeItem(at: output)
+        try expect(CGImageSourceCreateWithURL(imported as CFURL, nil) != nil,
+                   "Imported reference remains readable after its source is removed")
+        print("Self-test passed: planning, JPEG rendering, ON1 controls, handoff, and saved references")
     }
 
     private static func XCTUnwrapStyle<T>(_ value: T?) throws -> T {

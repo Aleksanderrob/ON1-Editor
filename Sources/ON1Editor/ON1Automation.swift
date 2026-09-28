@@ -40,6 +40,7 @@ enum ON1AutomationError: LocalizedError {
     case accessibilityNeeded
     case on1Missing
     case on1DidNotLaunch
+    case on1NotReady
     case ui(String)
     case sourceMissing(String)
     case exportMissing(String)
@@ -50,6 +51,7 @@ enum ON1AutomationError: LocalizedError {
             "Allow ON1 Editor in System Settings → Privacy & Security → Device Control and Data Access (Accessibility on older macOS), then try again."
         case .on1Missing: "ON1 Photo RAW 2026 is not installed."
         case .on1DidNotLaunch: "ON1 Photo RAW did not start."
+        case .on1NotReady: "ON1 Photo RAW did not become ready. Open ON1 and check that it responds, then try again."
         case .ui(let detail): "ON1's controls changed or did not respond: \(detail)"
         case .sourceMissing(let name): "Could not find \(name)."
         case .exportMissing(let name): "ON1 did not create \(name)."
@@ -150,7 +152,8 @@ private final class ON1Accessibility {
 
     func editSinglePhoto(_ photo: URL) throws {
         running?.activate()
-        try waitForWindow(excluding: ["Export", "Quick Export"], timeout: 15)
+        do { try waitForWindow(excluding: ["Export", "Quick Export"], timeout: 60) }
+        catch { throw ON1AutomationError.on1NotReady }
         try clickMenu("File", item: "Edit Single Photo...")
         try chooseFile(photo)
         try waitForWindow(containing: "Develop (\(photo.lastPathComponent)", timeout: 25)
